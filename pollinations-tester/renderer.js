@@ -141,27 +141,40 @@ function renderCards(containerId, models, onSelect) {
   el.querySelectorAll('.model-card').forEach(card => card.addEventListener('click', () => onSelect(card.dataset.id)));
 }
 
+// Список ID видео-моделей (строго)
+const VIDEO_MODEL_IDS = ['veo','seedance','seedance-pro','wan','grok-video','ltx-2'];
+
 async function loadModels() {
   try {
     const [textModels, imageModels, audioModels] = await Promise.all([
       window.api.getTextModels(), window.api.getImageModels(), window.api.getAudioModels(),
     ]);
-    const imgOnly = (imageModels || []).filter(m => {
+
+    const allImages = imageModels || [];
+
+    // Только чистые image-модели — исключаем всё что video
+    const imgOnly = allImages.filter(m => {
       const mods = m.outputModalities || m.modalities || [];
-      return !mods.includes('video') && !['veo','seedance','seedance-pro','wan','grok-video','ltx-2'].includes(m.id);
-    });
-    const vidOnly = (imageModels || []).filter(m => {
-      const mods = m.outputModalities || m.modalities || [];
-      return mods.includes('video') || ['veo','seedance','seedance-pro','wan','grok-video','ltx-2'].includes(m.id);
+      return !mods.includes('video') && !VIDEO_MODEL_IDS.includes(m.id);
     });
 
-    renderCards('img-model-cards', imgOnly.length ? imgOnly : (imageModels||[]), id => selectOrAdd('img-model', id));
-    renderCards('vid-model-cards', vidOnly.length ? vidOnly : (imageModels||[]), id => selectOrAdd('vid-model', id));
+    // Только video-модели — по ID или output
+    const vidOnly = allImages.filter(m => {
+      const mods = m.outputModalities || m.modalities || [];
+      return mods.includes('video') || VIDEO_MODEL_IDS.includes(m.id);
+    });
+
+    // Если API не вернул видео-модели через фильтр — создаём список вручную
+    const vidFinal = vidOnly.length ? vidOnly : VIDEO_MODEL_IDS.map(id => ({ id, name: id }));
+
+    renderCards('img-model-cards', imgOnly.length ? imgOnly : allImages, id => selectOrAdd('img-model', id));
+    renderCards('vid-model-cards', vidFinal, id => selectOrAdd('vid-model', id));
     renderCards('aud-model-cards', audioModels || [], id => {
       if (id === 'elevenmusic') switchAudioMode('music');
       else if (id.includes('whisper') || id === 'scribe') switchAudioMode('transcribe');
     });
-    // Добавить модели в селект чата
+
+    // Добавить текстовые модели в селект чата
     if (Array.isArray(textModels)) {
       textModels.forEach(m => selectOrAdd('chat-model', m.id));
     }
