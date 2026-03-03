@@ -14,13 +14,13 @@
     </div>
     <div class="header-right">
       <div class="key-status-wrap" id="keyStatusWrap">
-        <div class="key-pill" id="mainKeyPill" title="Основной ключ (текст / графика / аудио)">
+        <div class="key-pill" id="mainKeyPill" title="Основной ключ">
           <span class="key-dot" id="mainKeyDot"></span>
           <span class="key-label">Основной</span>
           <span class="key-balance" id="mainKeyBalance">—</span>
           <span class="key-unit">pollen</span>
         </div>
-        <div class="key-pill key-pill-video" id="videoKeysSummary" title="Видео-ключи">
+        <div class="key-pill" id="videoKeysSummary" title="Видео-ключи">
           <span class="key-dot" id="videoKeysDot"></span>
           <span class="key-label">Видео-ключи</span>
           <span class="key-balance" id="videoKeysBalance">—</span>
@@ -31,18 +31,16 @@
     </div>
   </header>
 
-  <!-- Keys detail panel (expandable) -->
+  <!-- Keys detail bar -->
   <div class="keys-detail-bar" id="keysDetailBar">
-    <div class="keys-detail-inner" id="keysDetailInner">
-      <!-- filled by JS -->
-    </div>
+    <div class="keys-detail-inner" id="keysDetailInner"></div>
   </div>
 
   <!-- Tabs -->
   <nav class="tabs">
     <button class="tab active" data-tab="image">🖼 Графика</button>
     <button class="tab" data-tab="video">🎬 Видео</button>
-    <button class="tab" data-tab="text">✍️ Текст</button>
+    <button class="tab" data-tab="text">💬 Чат</button>
     <button class="tab" data-tab="audio">🔊 Аудио</button>
   </nav>
 
@@ -77,30 +75,21 @@
         <input type="text" id="img-neg" value="worst quality, blurry" />
 
         <div class="row-2">
-          <div>
-            <label>Ширина</label>
-            <input type="number" id="img-width" value="1024" min="256" max="2048" step="64" />
-          </div>
-          <div>
-            <label>Высота</label>
-            <input type="number" id="img-height" value="1024" min="256" max="2048" step="64" />
-          </div>
+          <div><label>Ширина</label>
+            <input type="number" id="img-width" value="1024" min="256" max="2048" step="64" /></div>
+          <div><label>Высота</label>
+            <input type="number" id="img-height" value="1024" min="256" max="2048" step="64" /></div>
         </div>
-
         <div class="row-2">
-          <div>
-            <label>Seed (-1 = random)</label>
-            <input type="number" id="img-seed" value="-1" />
-          </div>
-          <div>
-            <label>Качество</label>
+          <div><label>Seed (-1 = random)</label>
+            <input type="number" id="img-seed" value="-1" /></div>
+          <div><label>Качество</label>
             <select id="img-quality">
               <option value="medium" selected>medium</option>
               <option value="low">low</option>
               <option value="high">high</option>
               <option value="hd">hd</option>
-            </select>
-          </div>
+            </select></div>
         </div>
 
         <label class="checkbox-label">
@@ -112,21 +101,18 @@
       </div>
 
       <div class="result-panel">
-        <div class="result-placeholder" id="img-placeholder">
-          <span>🖼</span><br/>Результат появится здесь
-        </div>
+        <div class="result-placeholder" id="img-placeholder"><span>🖼</span><br/>Результат появится здесь</div>
         <img id="img-result" class="hidden" alt="Generated image" />
         <div class="result-actions hidden" id="img-actions">
           <button id="img-open">📂 Открыть</button>
-          <button id="img-save">💾 Сохранить</button>
+          <button id="img-save">💾 Сохранить как…</button>
+          <button id="img-folder">📁 Папка images</button>
+          <span class="saved-hint" id="img-saved"></span>
         </div>
       </div>
     </div>
-
     <div class="model-cards-header">Доступные модели <span class="hint">— загружаются с API</span></div>
-    <div class="model-cards" id="img-model-cards">
-      <div class="loading-dots">⣾ Загрузка...</div>
-    </div>
+    <div class="model-cards" id="img-model-cards"><div class="loading-dots">⣾ Загрузка...</div></div>
   </section>
 
   <!-- ═══════ VIDEO TAB ═══════ -->
@@ -149,17 +135,13 @@
         <textarea id="vid-prompt" rows="3" placeholder="a sunset timelapse over the ocean">a sunset timelapse over the ocean</textarea>
 
         <div class="row-2">
-          <div>
-            <label>Длительность (сек)</label>
-            <input type="number" id="vid-dur" value="4" min="1" max="15" />
-          </div>
-          <div>
-            <label>Соотношение сторон</label>
+          <div><label>Длительность (сек)</label>
+            <input type="number" id="vid-dur" value="4" min="1" max="15" /></div>
+          <div><label>Соотношение сторон</label>
             <select id="vid-ratio">
               <option value="16:9" selected>16:9</option>
               <option value="9:16">9:16</option>
-            </select>
-          </div>
+            </select></div>
         </div>
 
         <label class="checkbox-label">
@@ -168,7 +150,6 @@
 
         <div class="warn-box">⚠️ Генерация видео может занять несколько минут</div>
 
-        <!-- Active video key indicator -->
         <div class="active-key-box" id="vidActiveKey">
           <span class="akey-label">Активный ключ:</span>
           <span class="akey-val" id="vidActiveKeyVal">—</span>
@@ -179,87 +160,102 @@
       </div>
 
       <div class="result-panel">
-        <div class="result-placeholder" id="vid-placeholder">
-          <span>🎬</span><br/>Видео появится здесь
-        </div>
+        <div class="result-placeholder" id="vid-placeholder"><span>🎬</span><br/>Видео появится здесь</div>
         <video id="vid-result" class="hidden" controls></video>
         <div class="result-actions hidden" id="vid-actions">
           <button id="vid-open">📂 Открыть</button>
-          <button id="vid-save">💾 Сохранить</button>
+          <button id="vid-save">💾 Сохранить как…</button>
+          <button id="vid-folder">📁 Папка videos</button>
+          <span class="saved-hint" id="vid-saved"></span>
         </div>
       </div>
     </div>
-
     <div class="model-cards-header">Доступные модели</div>
-    <div class="model-cards" id="vid-model-cards">
-      <div class="loading-dots">⣾ Загрузка...</div>
-    </div>
+    <div class="model-cards" id="vid-model-cards"><div class="loading-dots">⣾ Загрузка...</div></div>
   </section>
 
-  <!-- ═══════ TEXT TAB ═══════ -->
+  <!-- ═══════ CHAT TAB ═══════ -->
   <section class="tab-content hidden" id="tab-text">
-    <div class="panel-row">
-      <div class="controls-panel">
-        <h2>✍️ Текстовые модели</h2>
+    <div class="chat-layout">
 
-        <label>Модель</label>
-        <select id="txt-model">
-          <option value="openai" selected>openai (GPT-4o)</option>
-          <option value="openai-fast">openai-fast (GPT-5 Nano)</option>
-          <option value="openai-large">openai-large (GPT-5.2)</option>
-          <option value="gemini">gemini (Gemini 2.5 Pro)</option>
-          <option value="gemini-fast">gemini-fast (Gemini 2.5 Flash Lite)</option>
-          <option value="gemini-search">gemini-search</option>
-          <option value="claude">claude</option>
-          <option value="claude-fast">claude-fast (Haiku 4.5)</option>
-          <option value="claude-large">claude-large</option>
-          <option value="deepseek">deepseek (V3.2)</option>
-          <option value="grok">grok (Grok 4 Fast)</option>
-          <option value="mistral">mistral (Small 3.2)</option>
-          <option value="qwen-coder">qwen-coder</option>
-          <option value="qwen-safety">qwen-safety</option>
-          <option value="perplexity-fast">perplexity-fast</option>
-          <option value="perplexity-reasoning">perplexity-reasoning</option>
-          <option value="minimax">minimax (M2.5)</option>
-          <option value="kimi">kimi (Moonshot K2.5)</option>
-          <option value="nova-fast">nova-fast (Amazon Nova Micro)</option>
-          <option value="midijourney">midijourney</option>
-        </select>
+      <!-- Sidebar: список чатов -->
+      <aside class="chat-sidebar">
+        <div class="chat-sidebar-header">
+          <span class="chat-sidebar-title">💬 Чаты</span>
+          <button class="btn-new-chat" id="btnNewChat" title="Новый чат">＋</button>
+        </div>
+        <div class="chat-list" id="chatList">
+          <div class="loading-dots">⣾ Загрузка...</div>
+        </div>
+      </aside>
 
-        <label>Системный промпт (необязательно)</label>
-        <textarea id="txt-system" rows="2" placeholder="You are a helpful assistant..."></textarea>
-
-        <label>Запрос пользователя</label>
-        <textarea id="txt-prompt" rows="4" placeholder="Напиши хайку о программировании">Напиши хайку о программировании</textarea>
-
-        <div class="row-2">
-          <div>
-            <label>Temperature (0–2)</label>
-            <input type="range" id="txt-temp" min="0" max="2" step="0.1" value="1"
-              oninput="document.getElementById('txt-temp-val').textContent=this.value" />
-            <span class="range-val" id="txt-temp-val">1</span>
+      <!-- Main chat area -->
+      <div class="chat-main">
+        <!-- Chat toolbar -->
+        <div class="chat-toolbar">
+          <div class="chat-title-wrap">
+            <span class="chat-current-title" id="chatCurrentTitle">Новый чат</span>
+            <button class="btn-icon" id="btnRenameChat" title="Переименовать">✏️</button>
+          </div>
+          <div class="chat-toolbar-right">
+            <label class="toolbar-label">Модель</label>
+            <select id="chat-model" class="chat-model-select">
+              <option value="openai" selected>openai (GPT-4o)</option>
+              <option value="openai-fast">openai-fast (GPT-5 Nano)</option>
+              <option value="openai-large">openai-large (GPT-5.2)</option>
+              <option value="gemini">gemini (Gemini 2.5 Pro)</option>
+              <option value="gemini-fast">gemini-fast (Flash Lite)</option>
+              <option value="gemini-search">gemini-search</option>
+              <option value="claude">claude</option>
+              <option value="claude-fast">claude-fast (Haiku 4.5)</option>
+              <option value="claude-large">claude-large</option>
+              <option value="deepseek">deepseek (V3.2)</option>
+              <option value="grok">grok (Grok 4 Fast)</option>
+              <option value="mistral">mistral (Small 3.2)</option>
+              <option value="qwen-coder">qwen-coder</option>
+              <option value="perplexity-fast">perplexity-fast</option>
+              <option value="perplexity-reasoning">perplexity-reasoning</option>
+              <option value="minimax">minimax (M2.5)</option>
+              <option value="kimi">kimi (Kimi K2.5)</option>
+              <option value="nova-fast">nova-fast (Nova Micro)</option>
+              <option value="midijourney">midijourney</option>
+            </select>
+            <label class="toolbar-label">Темп.</label>
+            <input type="number" id="chat-temp" value="1" min="0" max="2" step="0.1" class="chat-temp-input" />
+            <button class="btn-icon btn-danger" id="btnDeleteChat" title="Удалить чат">🗑</button>
           </div>
         </div>
 
-        <button class="btn-generate" id="txt-generate">⚡ Отправить</button>
-        <div class="status-bar" id="txt-status"></div>
-      </div>
-
-      <div class="result-panel text-result-panel">
-        <div class="result-placeholder" id="txt-placeholder">
-          <span>✍️</span><br/>Ответ появится здесь
+        <!-- System prompt -->
+        <div class="chat-system-wrap" id="chatSystemWrap">
+          <div class="chat-system-toggle" id="chatSystemToggle">
+            <span>⚙️ Системный промпт</span><span class="chevron" id="systemChevron">▶</span>
+          </div>
+          <textarea id="chat-system" class="chat-system-input hidden" rows="3"
+            placeholder="You are a helpful assistant..."></textarea>
         </div>
-        <div id="txt-result" class="hidden text-output"></div>
-        <div class="result-actions hidden" id="txt-actions">
-          <button id="txt-copy">📋 Копировать</button>
-          <div class="txt-meta" id="txt-meta"></div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-welcome">
+            <div class="chat-welcome-icon">💬</div>
+            <div class="chat-welcome-text">Начните диалог — модель запомнит весь контекст беседы</div>
+          </div>
+        </div>
+
+        <!-- Input -->
+        <div class="chat-input-area">
+          <div class="chat-input-wrap">
+            <textarea id="chatInput" class="chat-input" rows="1"
+              placeholder="Введите сообщение... (Enter — отправить, Shift+Enter — перенос строки)"></textarea>
+            <button class="btn-send" id="btnSend" title="Отправить">➤</button>
+          </div>
+          <div class="chat-input-meta">
+            <span class="chat-tokens" id="chatTokens">Токены: 0↑ 0↓</span>
+            <button class="btn-clear-chat" id="btnClearChat">🧹 Очистить историю</button>
+          </div>
         </div>
       </div>
-    </div>
-
-    <div class="model-cards-header">Доступные модели</div>
-    <div class="model-cards" id="txt-model-cards">
-      <div class="loading-dots">⣾ Загрузка...</div>
     </div>
   </section>
 
@@ -296,7 +292,6 @@
               <option>callum</option><option>liam</option><option>george</option>
               <option>brian</option><option>bill</option>
             </select>
-
             <label>Формат</label>
             <select id="aud-format">
               <option selected>mp3</option><option>opus</option>
@@ -306,15 +301,10 @@
 
           <div id="music-options" class="hidden">
             <div class="row-2">
-              <div>
-                <label>Длительность (сек, 3–300)</label>
-                <input type="number" id="aud-duration" value="30" min="3" max="300" />
-              </div>
-              <div>
-                <label class="checkbox-label" style="margin-top:28px">
-                  <input type="checkbox" id="aud-instrumental" /> Инструментал
-                </label>
-              </div>
+              <div><label>Длительность (сек, 3–300)</label>
+                <input type="number" id="aud-duration" value="30" min="3" max="300" /></div>
+              <div><label class="checkbox-label" style="margin-top:28px">
+                <input type="checkbox" id="aud-instrumental" /> Инструментал</label></div>
             </div>
           </div>
 
@@ -328,16 +318,13 @@
             <label class="file-label">выберите файл<input type="file" id="aud-file" accept="audio/*" /></label>
           </div>
           <div id="aud-file-name" class="file-name"></div>
-
           <label>Язык (ISO-639-1)</label>
           <input type="text" id="aud-lang" placeholder="ru, en, de…" value="ru" />
-
           <label>Модель распознавания</label>
           <select id="aud-whisper-model">
             <option value="whisper-large-v3" selected>whisper-large-v3</option>
             <option value="scribe">scribe (ElevenLabs)</option>
           </select>
-
           <button class="btn-generate" id="aud-transcribe">🎤 Транскрибировать</button>
         </div>
 
@@ -345,27 +332,22 @@
       </div>
 
       <div class="result-panel">
-        <div class="result-placeholder" id="aud-placeholder">
-          <span>🔊</span><br/>Результат появится здесь
-        </div>
-        <div id="aud-player-wrap" class="hidden">
-          <audio id="aud-result" controls></audio>
-        </div>
+        <div class="result-placeholder" id="aud-placeholder"><span>🔊</span><br/>Результат появится здесь</div>
+        <div id="aud-player-wrap" class="hidden"><audio id="aud-result" controls></audio></div>
         <div id="aud-transcript-wrap" class="hidden text-output"></div>
         <div class="result-actions hidden" id="aud-actions">
           <button id="aud-open">📂 Открыть</button>
-          <button id="aud-save">💾 Сохранить</button>
+          <button id="aud-save">💾 Сохранить как…</button>
+          <button id="aud-folder">📁 Папка audio</button>
+          <span class="saved-hint" id="aud-saved"></span>
         </div>
         <div class="result-actions hidden" id="aud-transcript-actions">
           <button id="aud-copy">📋 Копировать</button>
         </div>
       </div>
     </div>
-
     <div class="model-cards-header">Доступные модели</div>
-    <div class="model-cards" id="aud-model-cards">
-      <div class="loading-dots">⣾ Загрузка...</div>
-    </div>
+    <div class="model-cards" id="aud-model-cards"><div class="loading-dots">⣾ Загрузка...</div></div>
   </section>
 
   <script src="renderer.js"></script>
