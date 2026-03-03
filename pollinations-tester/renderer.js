@@ -164,8 +164,23 @@ async function loadModels() {
       return mods.includes('video') || VIDEO_MODEL_IDS.includes(m.id);
     });
 
-    // Если API не вернул видео-модели через фильтр — создаём список вручную
-    const vidFinal = vidOnly.length ? vidOnly : VIDEO_MODEL_IDS.map(id => ({ id, name: id }));
+    // Если API не вернул видео-модели через фильтр — создаём список вручную с правильными мета-данными
+    const VIDEO_META = {
+      'grok-video':   { name: 'Grok Video',      paidOnly: false, isNew: true,  isAlpha: true  },
+      'ltx-2':        { name: 'LTX-2',            paidOnly: true,  isNew: true,  isAlpha: false },
+      'seedance-pro': { name: 'Seedance Pro-Fast', paidOnly: true,  isNew: false, isAlpha: false },
+      'seedance':     { name: 'Seedance Lite',     paidOnly: true,  isNew: false, isAlpha: false },
+      'wan':          { name: 'Wan 2.6',           paidOnly: true,  isNew: true,  isAlpha: false },
+      'veo':          { name: 'Veo 3.1 Fast',      paidOnly: true,  isNew: false, isAlpha: false },
+    };
+
+    // Патчим данные из API правильными badge-флагами
+    const vidPatched = (vidOnly.length ? vidOnly : VIDEO_MODEL_IDS.map(id => ({ id }))).map(m => ({
+      ...m,
+      ...(VIDEO_META[m.id] || {}),
+    }));
+
+    const vidFinal = vidPatched;
 
     renderCards('img-model-cards', imgOnly.length ? imgOnly : allImages, id => selectOrAdd('img-model', id));
     renderCards('vid-model-cards', vidFinal, id => selectOrAdd('vid-model', id));
