@@ -58,6 +58,16 @@ log('DIR', `audio  -> ${DIRS.audio}`);
 log('DIR', `chats  -> ${DIRS.chats}`);
 sep();
 
+// FREE image models — используем видео-ключи т.к. основной ключ платный
+const FREE_IMAGE_MODELS = ['flux', 'zimage', 'klein', 'klein-large', 'grok-imagine'];
+
+// Выбрать лучший ключ из пула видео-ключей (по балансу)
+function pickFreeKey() {
+  const active = keyStates.filter(s => s.active && s.balance > 0);
+  if (!active.length) return mainKey; // fallback на основной
+  return active.sort((a, b) => b.balance - a.balance)[0].key;
+}
+
 // ─── Pick best video key ──────────────────────────────────────────────────────
 function pickVideoKey() {
   const active = keyStates.filter(s => s.active && s.balance > 0);
@@ -275,6 +285,13 @@ ipcMain.handle('generate-image', async (_e, { model, prompt, width, height, seed
   log('IMAGE', `Model: ${model}`);
   log('IMAGE', `Prompt: ${prompt.slice(0, 80)}`);
   log('IMAGE', `Size: ${width}x${height} | seed: ${seed} | enhance: ${enhance}`);
+
+  // FREE модели используют видео-ключи, PAID — основной ключ
+  const isFree = FREE_IMAGE_MODELS.includes(model);
+  const chosenKey = isFree ? pickFreeKey() : mainKey;
+  const keyShort  = `${chosenKey.slice(0,8)}...${chosenKey.slice(-4)}`;
+  log('IMAGE', `Key: ${keyShort} (${isFree ? 'FREE pool' : 'main/paid'})`);
+
   const params = new URLSearchParams();
   params.set('model', model);
   params.set('width',  String(parseInt(width,  10) || 1024));
@@ -283,7 +300,7 @@ ipcMain.handle('generate-image', async (_e, { model, prompt, width, height, seed
   if (enhance)        params.set('enhance', 'true');
   if (negativePrompt) params.set('negative_prompt', negativePrompt);
   const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?${params}`;
-  const r   = await fetchBinary(url, { Authorization: `Bearer ${mainKey}` });
+  const r   = await fetchBinary(url, { Authorization: `Bearer ${chosenKey}` });
   if (r.status !== 200 || !r.contentType?.startsWith('image/')) {
     const e = r.buffer.toString().slice(0, 500);
     logErr('IMAGE', `HTTP ${r.status}: ${e}`);

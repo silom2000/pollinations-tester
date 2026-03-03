@@ -141,8 +141,11 @@ function renderCards(containerId, models, onSelect) {
   el.querySelectorAll('.model-card').forEach(card => card.addEventListener('click', () => onSelect(card.dataset.id)));
 }
 
-// Список ID видео-моделей (строго)
-const VIDEO_MODEL_IDS = ['veo','seedance','seedance-pro','wan','grok-video','ltx-2'];
+// Строгие списки моделей по типу
+const VIDEO_MODEL_IDS = ['veo', 'seedance', 'seedance-pro', 'wan', 'grok-video', 'ltx-2'];
+const IMAGE_MODEL_IDS = ['flux', 'zimage', 'klein', 'klein-large', 'gptimage', 'gptimage-large',
+  'kontext', 'seedream', 'seedream-pro', 'nanobanana', 'nanobanana-2', 'nanobanana-pro',
+  'imagen-4', 'grok-imagine'];
 
 async function loadModels() {
   try {
@@ -152,17 +155,11 @@ async function loadModels() {
 
     const allImages = imageModels || [];
 
-    // Только чистые image-модели — исключаем всё что video
-    const imgOnly = allImages.filter(m => {
-      const mods = m.outputModalities || m.modalities || [];
-      return !mods.includes('video') && !VIDEO_MODEL_IDS.includes(m.id);
-    });
+    // Только чистые image-модели — строго по списку IMAGE_MODEL_IDS
+    const imgOnly = allImages.filter(m => IMAGE_MODEL_IDS.includes(m.id));
 
-    // Только video-модели — по ID или output
-    const vidOnly = allImages.filter(m => {
-      const mods = m.outputModalities || m.modalities || [];
-      return mods.includes('video') || VIDEO_MODEL_IDS.includes(m.id);
-    });
+    // Только video-модели — строго по списку VIDEO_MODEL_IDS
+    const vidOnly = allImages.filter(m => VIDEO_MODEL_IDS.includes(m.id));
 
     // Если API не вернул видео-модели через фильтр — создаём список вручную с правильными мета-данными
     const VIDEO_META = {
