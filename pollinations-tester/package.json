@@ -1,0 +1,18 @@
+{
+  "name": "pollinations-tester",
+  "version": "1.0.0",
+  "description": "Pollinations AI Model Tester",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^36.3.1"
+  },
+  "dependencies": {
+    "form-data": "^4.0.5"
+  }
+}
