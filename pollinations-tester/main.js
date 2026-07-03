@@ -44,12 +44,14 @@ function loadEnv() {
 const ENV       = loadEnv();
 const mainKey   = ENV.POLLINATIONS_API_KEY || '';
 const videoKeys = (ENV.POLLINATIONS_VIDEO_KEYS || '').split(',').map(k => k.trim()).filter(Boolean);
+const imgbbKey  = ENV.IMGBB_API_KEY || '';
 const keyStates = [];
 
 // Print startup info
 sep('STARTUP');
 log('ENV', `.env loaded from ${path.join(ROOT, '.env')}`);
 log('KEY', `Main key: ${mainKey ? mainKey.slice(0,8) + '...' + mainKey.slice(-4) : '(not set!)'}`);
+log('KEY', `ImgBB key: ${imgbbKey ? imgbbKey.slice(0,8) + '...' + imgbbKey.slice(-4) : '(not set — ref images disabled)'}`);
 log('KEY', `Video keys: ${videoKeys.length}`);
 videoKeys.forEach((k, i) => log('KEY', `  [${i+1}] ${k.slice(0,8)}...${k.slice(-4)}`));
 log('DIR', `images -> ${DIRS.images}`);
@@ -59,20 +61,13 @@ log('DIR', `chats  -> ${DIRS.chats}`);
 sep();
 
 // FREE image models — используем видео-ключи т.к. основной ключ платный
-const FREE_IMAGE_MODELS = ['flux', 'zimage', 'klein', 'klein-large', 'grok-imagine'];
+const FREE_IMAGE_MODELS = ['flux', 'zimage', 'gptimage', 'klein', 'kontext', 'nova-canvas', 'gptimage-large'];
 
-// Выбрать лучший ключ из пула видео-ключей (по балансу)
-function pickFreeKey() {
-  const active = keyStates.filter(s => s.active && s.balance > 0);
-  if (!active.length) return mainKey; // fallback на основной
-  return active.sort((a, b) => b.balance - a.balance)[0].key;
-}
-
-// ─── Pick best video key ──────────────────────────────────────────────────────
-function pickVideoKey() {
+// ─── Pick best key from the shared pool (highest balance) ────────────────────
+function pickBestKey(tag = 'KEY') {
   const active = keyStates.filter(s => s.active && s.balance > 0);
   if (!active.length) {
-    logWarn('VIDEO', 'No active video keys, using first as fallback');
+    logWarn(tag, 'No active pool keys, falling back to main key');
     return keyStates[0]?.key || mainKey;
   }
   return active.sort((a, b) => b.balance - a.balance)[0].key;
@@ -134,10 +129,15 @@ function fetchBinary(url, headers = {}, redirectCount = 0) {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
         const loc = res.headers.location;
         log('HTTP', `  Redirect [${res.statusCode}] -> ${loc.slice(0, 80)}`);
-        return resolve(fetchBinary(
-          loc.startsWith('http') ? loc : new URL(loc, url).href,
-          headers, redirectCount + 1
-        ));
+        const targetUrl = loc.startsWith('http') ? loc : new URL(loc, url).href;
+        const nextHeaders = { ...headers };
+        try {
+          if (new URL(targetUrl).hostname !== new URL(url).hostname) {
+            delete nextHeaders['Authorization'];
+            delete nextHeaders['authorization'];
+          }
+        } catch (e) {}
+        return resolve(fetchBinary(targetUrl, nextHeaders, redirectCount + 1));
       }
       const chunks = [];
       res.on('data', c => chunks.push(c));
@@ -280,15 +280,15 @@ ipcMain.handle('chat-rename', (_e, { id, title }) => {
 });
 
 // ─── Image -> /images/ ────────────────────────────────────────────────────────
-ipcMain.handle('generate-image', async (_e, { model, prompt, width, height, seed, enhance, negativePrompt }) => {
+ipcMain.handle('generate-image', async (_e, { model, prompt, width, height, seed, enhance, negativePrompt, quality, transparent }) => {
   sep('IMAGE');
   log('IMAGE', `Model: ${model}`);
   log('IMAGE', `Prompt: ${prompt.slice(0, 80)}`);
-  log('IMAGE', `Size: ${width}x${height} | seed: ${seed} | enhance: ${enhance}`);
+  log('IMAGE', `Size: ${width}x${height} | seed: ${seed} | enhance: ${enhance} | quality: ${quality || 'default'} | transparent: ${!!transparent}`);
 
   // FREE модели используют видео-ключи, PAID — основной ключ
   const isFree = FREE_IMAGE_MODELS.includes(model);
-  const chosenKey = isFree ? pickFreeKey() : mainKey;
+  const chosenKey = isFree ? pickBestKey('IMAGE') : mainKey;
   const keyShort  = `${chosenKey.slice(0,8)}...${chosenKey.slice(-4)}`;
   log('IMAGE', `Key: ${keyShort} (${isFree ? 'FREE pool' : 'main/paid'})`);
 
@@ -296,9 +296,12 @@ ipcMain.handle('generate-image', async (_e, { model, prompt, width, height, seed
   params.set('model', model);
   params.set('width',  String(parseInt(width,  10) || 1024));
   params.set('height', String(parseInt(height, 10) || 1024));
-  params.set('seed',   String(parseInt(seed,   10)));
+  const parsedSeed = parseInt(seed, 10);
+  if (!isNaN(parsedSeed)) params.set('seed', String(parsedSeed));
   if (enhance)        params.set('enhance', 'true');
   if (negativePrompt) params.set('negative_prompt', negativePrompt);
+  if (quality)        params.set('quality', quality);
+  if (transparent)    params.set('transparent', 'true');
   const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?${params}`;
   const r   = await fetchBinary(url, { Authorization: `Bearer ${chosenKey}` });
   if (r.status !== 200 || !r.contentType?.startsWith('image/')) {
@@ -315,33 +318,111 @@ ipcMain.handle('generate-image', async (_e, { model, prompt, width, height, seed
   return { file: saved, contentType: r.contentType, savedAs: fname };
 });
 
+// ─── ImgBB upload — base64 → публичный URL ───────────────────────────────────
+// API: POST https://api.imgbb.com/1/upload
+// Docs: https://api.imgbb.com/
+// Принимает: multipart form-data с полем "image" (чистый base64 без data: префикса)
+// Возвращает JSON: { data: { url, display_url, ... }, success: true }
+async function uploadToImgBB(base64DataUrl) {
+  if (!imgbbKey) throw new Error('IMGBB_API_KEY не задан в .env');
+
+  // Отрезаем "data:image/jpeg;base64," — ImgBB принимает только чистый base64
+  const base64Clean = base64DataUrl.replace(/^data:image\/\w+;base64,/, '');
+
+  log('IMGBB', `Uploading image to ImgBB (${Math.round(base64Clean.length / 1024)} KB base64)...`);
+
+  // ImgBB принимает application/x-www-form-urlencoded
+  const body = `key=${encodeURIComponent(imgbbKey)}&image=${encodeURIComponent(base64Clean)}`;
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.imgbb.com',
+      path:     '/1/upload',
+      method:   'POST',
+      headers: {
+        'Content-Type':   'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, res => {
+      let data = '';
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (json.success && json.data?.url) {
+            logOk('IMGBB', `Uploaded OK → ${json.data.url}`);
+            resolve(json.data.url);
+          } else {
+            const msg = json.error?.message || JSON.stringify(json).slice(0, 200);
+            logErr('IMGBB', `Upload failed: ${msg}`);
+            reject(new Error(`ImgBB: ${msg}`));
+          }
+        } catch (e) {
+          logErr('IMGBB', `Invalid JSON response: ${data.slice(0, 200)}`);
+          reject(new Error('ImgBB: invalid response'));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 // ─── Video -> /videos/ ────────────────────────────────────────────────────────
-ipcMain.handle('generate-video', async (_e, { model, prompt, duration, aspectRatio, audio }) => {
+ipcMain.handle('generate-video', async (_e, { model, prompt, duration, aspectRatio, audio, refImageBase64 }) => {
   sep('VIDEO');
-  const chosenKey   = pickVideoKey();
+  const chosenKey   = pickBestKey('VIDEO');
   const chosenShort = `${chosenKey.slice(0,8)}...${chosenKey.slice(-4)}`;
   log('VIDEO', `Model: ${model}`);
   log('VIDEO', `Prompt: ${prompt.slice(0, 80)}`);
   log('VIDEO', `Duration: ${duration}s | Ratio: ${aspectRatio} | Audio: ${audio}`);
+  log('VIDEO', `Ref image: ${refImageBase64 ? 'YES (' + Math.round(refImageBase64.length / 1024) + ' KB base64)' : 'no'}`);
   log('VIDEO', `Key: ${chosenShort}`);
-  log('VIDEO', 'Waiting - generation may take several minutes...');
+
   const params = new URLSearchParams();
   params.set('model', model);
-  if (duration)    params.set('duration', String(duration));
-  if (aspectRatio) params.set('aspectRatio', aspectRatio);
-  if (audio)       params.set('audio', 'true');
-  const url       = `https://gen.pollinations.ai/video/${encodeURIComponent(prompt)}?${params}`;
+  if (duration)    params.set('duration',     String(duration));
+  if (aspectRatio) params.set('aspectRatio',  aspectRatio);
+  if (audio)       params.set('audio',        'true');
+
+  // Если есть референс — загружаем на ImgBB, получаем URL, добавляем ?image=URL
+  if (refImageBase64) {
+    if (!imgbbKey) {
+      logErr('VIDEO', 'IMGBB_API_KEY не задан — референс проигнорирован');
+      sep();
+      return { error: 'IMGBB_API_KEY не задан в .env — загрузка референса невозможна' };
+    }
+    try {
+      const imageUrl = await uploadToImgBB(refImageBase64);
+      // Согласно api.yaml: параметр называется "image", значение — URL
+      params.set('image', imageUrl);
+      log('VIDEO', `Ref image URL set: ${imageUrl}`);
+    } catch (e) {
+      logErr('VIDEO', `ImgBB upload failed: ${e.message}`);
+      sep();
+      return { error: `Ошибка загрузки референса на ImgBB: ${e.message}` };
+    }
+  }
+
+  log('VIDEO', 'Sending GET request, waiting for video (may take several minutes)...');
   const startTime = Date.now();
-  const r         = await fetchBinary(url, { Authorization: `Bearer ${chosenKey}` });
-  const elapsed   = ((Date.now() - startTime) / 1000).toFixed(1);
+
+  // Единственный метод согласно api.yaml — GET /video/{prompt}?params
+  const url = `https://gen.pollinations.ai/video/${encodeURIComponent(prompt)}?${params}`;
+  const r   = await fetchBinary(url, { Authorization: `Bearer ${chosenKey}` });
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   if (r.status !== 200 || !r.contentType?.startsWith('video/')) {
     const e = r.buffer.toString().slice(0, 500);
     logErr('VIDEO', `HTTP ${r.status} (${elapsed}s): ${e}`);
     sep();
     return { error: `HTTP ${r.status}: ${e}` };
   }
+
   const state = keyStates.find(s => s.key === chosenKey);
   if (state && state.balance !== null) state.balance = Math.max(0, state.balance - 1);
+
   const fname = `${Date.now()}_${model}.mp4`;
   const saved = path.join(DIRS.videos, fname);
   fs.writeFileSync(saved, r.buffer);
@@ -351,16 +432,17 @@ ipcMain.handle('generate-video', async (_e, { model, prompt, duration, aspectRat
 });
 
 // ─── Audio -> /audio/ ────────────────────────────────────────────────────────
-ipcMain.handle('generate-audio', async (_e, { model, text, voice, responseFormat, duration, instrumental }) => {
+ipcMain.handle('generate-audio', async (_e, { model, text, voice, responseFormat, speed, duration, instrumental }) => {
   sep('AUDIO');
-  log('AUDIO', `Model: ${model} | voice: ${voice} | format: ${responseFormat}`);
+  log('AUDIO', `Model: ${model} | voice: ${voice} | format: ${responseFormat} | speed: ${speed || 1}`);
   log('AUDIO', `Text: ${String(text).slice(0, 80)}${text.length > 80 ? '...' : ''}`);
   const params = new URLSearchParams();
   params.set('model', model);
-  params.set('voice', voice || 'nova');
+  if (voice) params.set('voice', voice);
   params.set('response_format', responseFormat || 'mp3');
-  if (duration)     params.set('duration', String(duration));
-  if (instrumental) params.set('instrumental', 'true');
+  if (speed && speed !== 1) params.set('speed', String(speed));
+  if (duration)             params.set('duration', String(duration));
+  if (instrumental)         params.set('instrumental', 'true');
   const url = `https://gen.pollinations.ai/audio/${encodeURIComponent(text)}?${params}`;
   const r   = await fetchBinary(url, { Authorization: `Bearer ${mainKey}` });
   if (r.status !== 200 || !r.contentType?.startsWith('audio/')) {
@@ -385,7 +467,7 @@ ipcMain.handle('transcribe-audio', async (_e, { filePath, language, model }) => 
   const FormData = require('form-data');
   const form = new FormData();
   form.append('file', fs.createReadStream(filePath), path.basename(filePath));
-  form.append('model', model || 'whisper-large-v3');
+  form.append('model', model || 'whisper');
   if (language) form.append('language', language);
   return new Promise(resolve => {
     const req = https.request({

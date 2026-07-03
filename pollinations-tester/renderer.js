@@ -8,6 +8,7 @@ let currentVideoFile = null;
 let currentAudioFile = null;
 let audioMode = 'tts';
 let transcribeFilePath = null;
+let _vidTimer = null;
 
 // Chat state
 let chatId       = null;   // ID текущего чата (имя файла без .json)
@@ -142,10 +143,17 @@ function renderCards(containerId, models, onSelect) {
 }
 
 // Строгие списки моделей по типу
-const VIDEO_MODEL_IDS = ['veo', 'seedance', 'seedance-pro', 'wan', 'grok-video', 'ltx-2'];
-const IMAGE_MODEL_IDS = ['flux', 'zimage', 'klein', 'klein-large', 'gptimage', 'gptimage-large',
-  'kontext', 'seedream', 'seedream-pro', 'nanobanana', 'nanobanana-2', 'nanobanana-pro',
-  'imagen-4', 'grok-imagine'];
+const VIDEO_MODEL_IDS = [
+  'ltx-2', 'wan-fast', 'p-video', 'seedance-pro', 'grok-video-pro',
+  'wan', 'nova-reel', 'veo', 'seedance-2.0', 'wan-pro'
+];
+const IMAGE_MODEL_IDS = [
+  'flux', 'zimage', 'p-image', 'gptimage', 'klein',
+  'p-image-edit', 'grok-imagine', 'seedream', 'kontext',
+  'nanobanana', 'qwen-image', 'nova-canvas', 'seedream5',
+  'seedream-pro', 'gptimage-large', 'gpt-image-2', 'wan-image',
+  'nanobanana-2', 'wan-image-pro', 'grok-imagine-pro', 'nanobanana-pro'
+];
 
 async function loadModels() {
   try {
@@ -163,12 +171,16 @@ async function loadModels() {
 
     // Если API не вернул видео-модели через фильтр — создаём список вручную с правильными мета-данными
     const VIDEO_META = {
-      'grok-video':   { name: 'Grok Video',      paidOnly: false, isNew: true,  isAlpha: true  },
-      'ltx-2':        { name: 'LTX-2',            paidOnly: true,  isNew: true,  isAlpha: false },
-      'seedance-pro': { name: 'Seedance Pro-Fast', paidOnly: true,  isNew: false, isAlpha: false },
-      'seedance':     { name: 'Seedance Lite',     paidOnly: true,  isNew: false, isAlpha: false },
-      'wan':          { name: 'Wan 2.6',           paidOnly: true,  isNew: true,  isAlpha: false },
-      'veo':          { name: 'Veo 3.1 Fast',      paidOnly: true,  isNew: false, isAlpha: false },
+      'ltx-2':          { name: 'LTX-2.3',           paidOnly: false, isNew: true,  isAlpha: true  },
+      'wan-fast':       { name: 'Wan 2.2',           paidOnly: true,  isNew: false, isAlpha: false },
+      'p-video':        { name: 'Pruna p-video',     paidOnly: true,  isNew: false, isAlpha: false },
+      'seedance-pro':   { name: 'Seedance Pro-Fast', paidOnly: true,  isNew: false, isAlpha: false },
+      'grok-video-pro': { name: 'Grok Video Pro',    paidOnly: true,  isNew: false, isAlpha: false },
+      'wan':            { name: 'Wan 2.6',           paidOnly: true,  isNew: false, isAlpha: false },
+      'nova-reel':      { name: 'Nova Reel',         paidOnly: false, isNew: false, isAlpha: false },
+      'veo':            { name: 'Veo 3.1 Fast',      paidOnly: true,  isNew: false, isAlpha: false },
+      'seedance-2.0':   { name: 'Seedance 2.0',      paidOnly: true,  isNew: false, isAlpha: false },
+      'wan-pro':        { name: 'Wan 2.7',           paidOnly: false, isNew: false, isAlpha: false }
     };
 
     // Патчим данные из API правильными badge-флагами
@@ -179,11 +191,17 @@ async function loadModels() {
 
     const vidFinal = vidPatched;
 
-    renderCards('img-model-cards', imgOnly.length ? imgOnly : allImages, id => selectOrAdd('img-model', id));
+    renderCards('img-model-cards', imgOnly, id => selectOrAdd('img-model', id));
     renderCards('vid-model-cards', vidFinal, id => selectOrAdd('vid-model', id));
     renderCards('aud-model-cards', audioModels || [], id => {
       if (id === 'elevenmusic') switchAudioMode('music');
-      else if (id.includes('whisper') || id === 'scribe') switchAudioMode('transcribe');
+      else if (['whisper', 'scribe', 'universal-2', 'universal-3-pro'].includes(id)) {
+        switchAudioMode('transcribe');
+        selectOrAdd('aud-whisper-model', id);
+      } else {
+        switchAudioMode('tts');
+        selectOrAdd('aud-tts-model', id);
+      }
     });
 
     // Добавить текстовые модели в селект чата
@@ -210,6 +228,8 @@ $('img-generate').addEventListener('click', async () => {
       width: $('img-width').value, height: $('img-height').value,
       seed: $('img-seed').value, enhance: $('img-enhance').checked,
       negativePrompt: $('img-neg').value,
+      quality: $('img-quality').value,
+      transparent: $('img-transparent').checked,
     });
     if (result.error) { setStatus('img-status', `❌ ${result.error}`, 'error'); }
     else {
@@ -233,13 +253,70 @@ $('img-save').addEventListener('click',   async () => currentImageFile && await 
 $('img-folder').addEventListener('click', () => window.api.openFolder('images'));
 
 // ─── VIDEO TAB ────────────────────────────────────────────────────────────────
+let vidRefBase64 = null;  // base64-строка референсного изображения
+
+// Модели, поддерживающие референсное изображение (параметр ?image= в api.yaml)
+const VIDEO_MODELS_WITH_REF = ['grok-video-pro', 'veo', 'wan', 'wan-fast', 'wan-pro', 'seedance-pro', 'seedance-2.0', 'ltx-2'];
+
+// Показывать/скрывать блок референса в зависимости от модели
+$('vid-model').addEventListener('change', () => {
+  const supportsRef = VIDEO_MODELS_WITH_REF.includes($('vid-model').value);
+  $('vid-ref-wrap').classList.toggle('hidden', !supportsRef);
+  if (!supportsRef) clearVidRef();
+});
+// Инициализация: показать если текущая модель поддерживает референс
+if (!VIDEO_MODELS_WITH_REF.includes($('vid-model').value)) $('vid-ref-wrap').classList.add('hidden');
+
+function clearVidRef() {
+  vidRefBase64 = null;
+  $('vid-ref-name').textContent = '';
+  $('vid-ref-preview-wrap').classList.add('hidden');
+  $('vid-ref-preview').src = '';
+  $('vid-ref-file').value = '';
+}
+
+function applyVidRefFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    vidRefBase64 = e.target.result; // data:image/...;base64,...
+    $('vid-ref-preview').src = vidRefBase64;
+    $('vid-ref-preview-wrap').classList.remove('hidden');
+    $('vid-ref-name').textContent = `📎 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+  };
+  reader.readAsDataURL(file);
+}
+
+$('vid-ref-file').addEventListener('change', e => applyVidRefFile(e.target.files[0]));
+$('vid-ref-clear').addEventListener('click', clearVidRef);
+
+const vidDrop = $('vid-ref-drop');
+vidDrop.addEventListener('dragover',  e => { e.preventDefault(); vidDrop.style.borderColor = 'var(--accent)'; });
+vidDrop.addEventListener('dragleave', () => { vidDrop.style.borderColor = ''; });
+vidDrop.addEventListener('drop', e => {
+  e.preventDefault(); vidDrop.style.borderColor = '';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) applyVidRefFile(file);
+});
 saveLabel('vid-generate', '⚡ Сгенерировать');
 
 $('vid-generate').addEventListener('click', async () => {
   const prompt = $('vid-prompt').value.trim();
   if (!prompt) { setStatus('vid-status', '⚠️ Введите промпт', 'error'); return; }
   setLoading('vid-generate', true, '⏳ Генерация видео...');
-  setStatus('vid-status', '🔄 Запрос отправлен. Это может занять 1–5 минут...');
+  clearInterval(_vidTimer);
+  const _vidStart = Date.now();
+  _vidTimer = setInterval(() => {
+    const s = Math.floor((Date.now() - _vidStart) / 1000);
+    setStatus('vid-status', `🔄 Генерация... ${s}с прошло`);
+  }, 1000);
+
+  // Если есть референс — сначала показываем статус загрузки на ImgBB
+  if (vidRefBase64) {
+    setStatus('vid-status', '☁️ Загрузка референса на ImgBB...');
+  } else {
+    setStatus('vid-status', '🔄 Запрос отправлен...');
+  }
   $('vid-result').classList.add('hidden');
   $('vid-placeholder').classList.remove('hidden');
   $('vid-actions').classList.add('hidden');
@@ -247,6 +324,7 @@ $('vid-generate').addEventListener('click', async () => {
     const result = await window.api.generateVideo({
       model: $('vid-model').value, prompt,
       duration: $('vid-dur').value, aspectRatio: $('vid-ratio').value, audio: $('vid-audio').checked,
+      refImageBase64: vidRefBase64 || null,
     });
     if (result.error) { setStatus('vid-status', `❌ ${result.error}`, 'error'); }
     else {
@@ -260,6 +338,7 @@ $('vid-generate').addEventListener('click', async () => {
       loadKeysInfo();
     }
   } catch(e) { setStatus('vid-status', `❌ ${e.message}`, 'error'); }
+  clearInterval(_vidTimer); _vidTimer = null;
   setLoading('vid-generate', false, '⚡ Сгенерировать');
 });
 
@@ -443,7 +522,7 @@ function renderMessages() {
       <div class="chat-bubble-row ${isUser ? 'user' : 'assistant'}">
         <div class="chat-bubble ${isUser ? 'bubble-user' : 'bubble-assistant'}">
           <div class="bubble-role">${isUser ? '👤 Вы' : '🤖 Модель'}</div>
-          <div class="bubble-text">${escHtml(m.content)}</div>
+          <div class="bubble-text">${renderMarkdown(m.content)}</div>
         </div>
       </div>`;
   }).join('');
@@ -492,6 +571,24 @@ function escHtml(str) {
     .replace(/\n/g,'<br>');
 }
 
+function renderMarkdown(raw) {
+  const esc = s => String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Split on fenced code blocks so newlines inside them aren't replaced with <br>
+  const parts = String(raw).split(/(```[\w]*\n?[\s\S]*?```)/g);
+  return parts.map((part, i) => {
+    if (i % 2 === 1) {
+      const code = part.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '');
+      return `<pre class="md-pre"><code>${esc(code)}</code></pre>`;
+    }
+    return esc(part)
+      .replace(/`([^`\n]+)`/g, '<code class="md-code">$1</code>')
+      .replace(/\*\*([^*\n]{1,200})\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]{1,200})\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+  }).join('');
+}
+
 function formatDate(iso) {
   if (!iso) return '';
   try {
@@ -519,6 +616,13 @@ function switchAudioMode(mode) {
   setStatus('aud-status', '');
 }
 
+$('aud-tts-model').addEventListener('change', () => {
+  const model = $('aud-tts-model').value;
+  $('aud-voice').disabled = ['qwen-tts', 'qwen-tts-instruct', 'acestep'].includes(model);
+});
+// Init on load
+$('aud-tts-model').dispatchEvent(new Event('change'));
+
 saveLabel('aud-generate', '⚡ Сгенерировать');
 
 $('aud-generate').addEventListener('click', async () => {
@@ -531,10 +635,11 @@ $('aud-generate').addEventListener('click', async () => {
   $('aud-actions').classList.add('hidden');
   try {
     const result = await window.api.generateAudio({
-      model: audioMode === 'music' ? 'elevenmusic' : 'elevenlabs',
+      model: audioMode === 'music' ? 'elevenmusic' : $('aud-tts-model').value,
       text,
-      voice: $('aud-voice').value,
+      voice: ['qwen-tts', 'qwen-tts-instruct', 'acestep'].includes($('aud-tts-model').value) ? '' : $('aud-voice').value,
       responseFormat: $('aud-format').value,
+      speed: audioMode === 'tts' ? parseFloat($('aud-speed').value) || 1 : undefined,
       duration: audioMode === 'music' ? $('aud-duration').value : undefined,
       instrumental: audioMode === 'music' ? $('aud-instrumental').checked : false,
     });

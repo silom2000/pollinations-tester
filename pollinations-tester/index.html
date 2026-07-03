@@ -95,6 +95,9 @@
         <label class="checkbox-label">
           <input type="checkbox" id="img-enhance" /> Enhance (AI улучшение промпта)
         </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="img-transparent" /> Прозрачный фон (PNG)
+        </label>
 
         <button class="btn-generate" id="img-generate">⚡ Сгенерировать</button>
         <div class="status-bar" id="img-status"></div>
@@ -133,6 +136,23 @@
 
         <label>Промпт</label>
         <textarea id="vid-prompt" rows="3" placeholder="a sunset timelapse over the ocean">a sunset timelapse over the ocean</textarea>
+
+        <!-- Референсное изображение — только для grok-video -->
+        <div id="vid-ref-wrap">
+          <label>Референсное изображение <span style="color:var(--text3);font-weight:400">(необязательно, загружается через ImgBB)</span></label>
+          <div class="file-drop-zone" id="vid-ref-drop">
+            <span>Перетащите картинку сюда или</span>
+            <label class="file-label">выберите файл<input type="file" id="vid-ref-file" accept="image/*" /></label>
+          </div>
+          <div id="vid-ref-preview-wrap" class="hidden" style="position:relative;margin-top:6px;">
+            <img id="vid-ref-preview" style="width:100%;max-height:140px;object-fit:contain;border-radius:6px;border:1px solid var(--border);" alt="reference" />
+            <button id="vid-ref-clear" title="Убрать изображение"
+              style="position:absolute;top:4px;right:4px;background:rgba(15,17,23,.8);border:1px solid var(--border);
+                     border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;color:var(--text2);
+                     display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
+          </div>
+          <div id="vid-ref-name" class="file-name"></div>
+        </div>
 
         <div class="row-2">
           <div><label>Длительность (сек)</label>
@@ -200,22 +220,22 @@
           <div class="chat-toolbar-right">
             <label class="toolbar-label">Модель</label>
             <select id="chat-model" class="chat-model-select">
-              <option value="openai" selected>openai (GPT-4o)</option>
+              <option value="openai" selected>openai (GPT-5.4 Nano)</option>
               <option value="openai-fast">openai-fast (GPT-5 Nano)</option>
-              <option value="openai-large">openai-large (GPT-5.2)</option>
-              <option value="gemini">gemini (Gemini 2.5 Pro)</option>
-              <option value="gemini-fast">gemini-fast (Flash Lite)</option>
-              <option value="gemini-search">gemini-search</option>
-              <option value="claude">claude</option>
-              <option value="claude-fast">claude-fast (Haiku 4.5)</option>
-              <option value="claude-large">claude-large</option>
-              <option value="deepseek">deepseek (V3.2)</option>
-              <option value="grok">grok (Grok 4 Fast)</option>
-              <option value="mistral">mistral (Small 3.2)</option>
-              <option value="qwen-coder">qwen-coder</option>
-              <option value="perplexity-fast">perplexity-fast</option>
-              <option value="perplexity-reasoning">perplexity-reasoning</option>
-              <option value="minimax">minimax (M2.5)</option>
+              <option value="openai-large">openai-large (GPT-5.4)</option>
+              <option value="gemini">gemini (Gemini 3 Flash)</option>
+              <option value="gemini-fast">gemini-fast (Gemini 2.5 Flash Lite)</option>
+              <option value="gemini-search">gemini-search (Gemini 2.5 Search)</option>
+              <option value="claude">claude (Claude Sonnet 4.6)</option>
+              <option value="claude-fast">claude-fast (Claude Haiku 4.5)</option>
+              <option value="claude-large">claude-large (Claude Opus 4.6)</option>
+              <option value="deepseek">deepseek (DeepSeek V4 Flash)</option>
+              <option value="grok">grok (Grok 4.20)</option>
+              <option value="mistral">mistral (Mistral Small 3.2)</option>
+              <option value="qwen-coder">qwen-coder (Qwen3 Coder 30B)</option>
+              <option value="perplexity-fast">perplexity-fast (Sonar)</option>
+              <option value="perplexity-reasoning">perplexity-reasoning (Sonar Reasoning)</option>
+              <option value="minimax">minimax (MiniMax M2.7)</option>
               <option value="kimi">kimi (Kimi K2.5)</option>
               <option value="nova-fast">nova-fast (Nova Micro)</option>
               <option value="midijourney">midijourney</option>
@@ -277,8 +297,17 @@
           <textarea id="aud-text" rows="4" placeholder="Hello, welcome to Pollinations!">Hello, welcome to Pollinations!</textarea>
 
           <div id="tts-options">
+            <label>Модель TTS</label>
+            <select id="aud-tts-model">
+              <option value="elevenlabs" selected>elevenlabs (ElevenLabs v3)</option>
+              <option value="elevenflash">elevenflash (Flash v2.5)</option>
+              <option value="qwen-tts">qwen-tts (Qwen3 Flash)</option>
+              <option value="qwen-tts-instruct">qwen-tts-instruct</option>
+              <option value="acestep">acestep (ACE-Step 1.5 Turbo)</option>
+            </select>
             <label>Голос</label>
             <select id="aud-voice">
+
               <option>alloy</option><option>echo</option><option>fable</option>
               <option>onyx</option><option selected>nova</option><option>shimmer</option>
               <option>ash</option><option>ballad</option><option>coral</option>
@@ -297,6 +326,8 @@
               <option selected>mp3</option><option>opus</option>
               <option>aac</option><option>flac</option><option>wav</option>
             </select>
+            <label>Скорость речи (0.25–4.0)</label>
+            <input type="number" id="aud-speed" value="1" min="0.25" max="4" step="0.25" />
           </div>
 
           <div id="music-options" class="hidden">
@@ -322,8 +353,10 @@
           <input type="text" id="aud-lang" placeholder="ru, en, de…" value="ru" />
           <label>Модель распознавания</label>
           <select id="aud-whisper-model">
-            <option value="whisper-large-v3" selected>whisper-large-v3</option>
-            <option value="scribe">scribe (ElevenLabs)</option>
+            <option value="whisper" selected>whisper (Whisper Large V3)</option>
+            <option value="universal-2">universal-2 (AssemblyAI)</option>
+            <option value="universal-3-pro">universal-3-pro (AssemblyAI Pro)</option>
+            <option value="scribe">scribe (Scribe v2)</option>
           </select>
           <button class="btn-generate" id="aud-transcribe">🎤 Транскрибировать</button>
         </div>

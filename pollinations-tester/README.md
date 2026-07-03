@@ -211,7 +211,7 @@ keyStates[] = [{ key, balance, active }]
 
 ```
 GET https://gen.pollinations.ai/image/{prompt}
-  ?model=flux
+  &model=flux
   &width=1920
   &height=1080
   &seed=-1

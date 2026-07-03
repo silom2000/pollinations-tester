@@ -488,23 +488,42 @@ audio#aud-result {
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  overflow: hidden;
+  overflow: visible;
+  height: 36px;
 }
 .seg {
-  flex: 1;
-  padding: 8px 0;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 6px;
   background: none;
   border: none;
+  border-radius: var(--radius-sm);
   color: var(--text2);
-  font-size: 13px;
+  font-size: 12px;
+  font-family: var(--font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition: background .15s, color .15s;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .seg.active {
   background: var(--accent);
   color: #0f1117;
   font-weight: 600;
 }
+
+/* ── Video reference image block ────────────── */
+#vid-ref-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#vid-ref-wrap.hidden { display: none !important; }
 
 /* ── File drop zone ──────────────────────────── */
 .file-drop-zone {
@@ -819,6 +838,30 @@ audio#aud-result {
   border-radius: 4px; transition: background .15s, color .15s;
 }
 .btn-clear-chat:hover { background: var(--bg4); color: var(--danger); }
+
+/* ── Markdown in chat ────────────────────────── */
+.md-pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: pre;
+  margin: 6px 0;
+  color: var(--accent2);
+  line-height: 1.5;
+}
+.md-code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+}
 
 /* ── Scrollbars ──────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
